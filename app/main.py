@@ -9,17 +9,20 @@ from app.core.logging import setup_logging
 from app.db import engine as pg
 from app.exceptions.base import AppError
 from app.exceptions.handlers import app_error_handler
+from app.providers.x.twitterapi import client as twitterapi
 
 logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     setup_logging(settings.environment)
 
     await pg.connect()
+    await twitterapi.initialize(app)
     logger.info("Application startup complete")
     yield
+    await twitterapi.shutdown(app)
     await pg.disconnect()
 
 
