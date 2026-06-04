@@ -9,6 +9,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class TwitterApiIoSettings(BaseModel):
     api_key: str
     base_url: str = "https://api.twitterapi.io"
+    rate_limit_enabled: bool = True
+    period_sec: float = 5.0
 
 
 class Settings(BaseSettings):

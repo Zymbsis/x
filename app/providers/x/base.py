@@ -1,17 +1,15 @@
 import abc
 from dataclasses import dataclass
 from datetime import datetime
-from decimal import Decimal
-from typing import Any
 
 from app.schemas.x.dto import XChannelInfo, XComment, XPost
-from app.schemas.x.options import CollectionOperation, CollectionOptions
+from app.schemas.x.options import CollectionOptions
 
 
 @dataclass
-class ProviderResult[T]:
-    data: list[T]
-    raw: list[dict[str, Any]]
+class ProviderResult[ItemT]:
+    data: list[ItemT]
+    raw: list[dict[str, object]]
 
 
 class XProvider(abc.ABC):
@@ -54,8 +52,3 @@ class XProvider(abc.ABC):
         since: datetime | None,
         options: CollectionOptions,
     ) -> ProviderResult[XComment]: ...
-
-    @abc.abstractmethod
-    async def estimate_cost(
-        self, operation: CollectionOperation, expected_items: int, options: CollectionOptions
-    ) -> Decimal: ...
