@@ -4,6 +4,11 @@ from datetime import datetime
 from typing import Any
 
 STATUS_URL_RE = re.compile(r"/status/(\d+)")
+_DATETIME_FORMATS = (
+    "%a %b %d %H:%M:%S %z %Y",
+    "%Y-%m-%dT%H:%M:%S%z",
+    "%Y-%m-%dT%H:%M:%S.%fZ",
+)
 
 
 def extract_username(handle_or_url: str) -> str:
@@ -22,6 +27,27 @@ def extract_post_id(url_or_id: str) -> str:
         return match.group(1)
     detail = f"Cannot extract post ID from: {url_or_id!r}"
     raise ValueError(detail)
+
+
+def parse_datetime(value: str | None) -> datetime:
+    if value is None:
+        raise ValueError("datetime value is required")
+
+    for fmt in _DATETIME_FORMATS:
+        try:
+            return datetime.strptime(value, fmt)
+        except ValueError:
+            continue
+    detail = f"Unsupported datetime format: {value}"
+    raise ValueError(detail)
+
+
+def get_canonical_url(handle: str) -> str:
+    return f"https://x.com/{handle}"
+
+
+def get_snippet_from_text(text: str) -> str:
+    return (" ".join(text.split()))[:120]
 
 
 def in_range(moment: datetime, since: datetime | None, until: datetime | None) -> bool:
