@@ -1,33 +1,40 @@
 from pydantic import BaseModel
 
-from app.schemas.x.dto import XChannelInfo, XComment, XPost
+from app.schemas.x.dto import ErrorDTO, XChannelInfo, XPost
 
 
-class AccountInfoResponse(BaseModel):
-    data: list[XChannelInfo]
-    raw: list[dict]
+class BaseResponse[TData](BaseModel):
+    data: list[TData]
+    errors: list[ErrorDTO]
 
 
-class SearchAccountsResponse(BaseModel):
-    data: list[XChannelInfo]
-    raw: list[dict]
+class AccountResponse(BaseResponse[XChannelInfo]):
+    pass
 
 
-class AccountPostsResponse(BaseModel):
-    data: list[XPost]
-    raw: list[dict]
+class PostResponse(BaseResponse[XPost]):
+    pass
 
 
-class SearchPostsResponse(BaseModel):
-    data: list[XPost]
-    raw: list[dict]
+class AccountInfoResponse(AccountResponse):
+    pass
 
 
-class PostsResponse(BaseModel):
-    data: list[XPost]
-    raw: list[dict]
+class SearchAccountsResponse(AccountResponse):
+    pass
 
 
-class RepliesResponse(BaseModel):
-    data: list[XComment]
-    raw: list[dict]
+class AccountPostsResponse(PostResponse):
+    pass
+
+
+class SearchPostsResponse(PostResponse):
+    pass
+
+
+class PostsResponse(PostResponse):
+    pass
+
+
+class RepliesResponse(PostResponse):
+    pass

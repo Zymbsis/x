@@ -66,11 +66,26 @@ def to_unix_timestamp(value: datetime | None) -> int | None:
     return None if value is None else int(value.timestamp())
 
 
-def has_replies(tweet: dict[str, Any]) -> bool:
-    return int(tweet.get("replyCount", 0) or 0) > 0
-
-
-def filter_tweets_by_with_replies(tweets: object, with_replies: bool) -> object:
-    if with_replies or not isinstance(tweets, list):
+def filter_tweets_by_date_range(
+    tweets: list[dict[str, Any]],
+    since: datetime | None,
+    until: datetime | None,
+) -> list[dict]:
+    if since is None and until is None:
         return tweets
-    return [tweet for tweet in tweets if not (isinstance(tweet, dict) and has_replies(tweet))]
+
+    return [
+        tweet
+        for tweet in tweets
+        if tweet.get("createdAt") and in_range(parse_datetime(tweet["createdAt"]), since, until)
+    ]
+
+
+def filter_tweets_by_with_replies(
+    tweets: list[dict[str, Any]],
+    with_replies: bool,
+) -> list[dict[str, Any]]:
+    if with_replies:
+        return tweets
+
+    return [tweet for tweet in tweets if not tweet.get("isReply")]

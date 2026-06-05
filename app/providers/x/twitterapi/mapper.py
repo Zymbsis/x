@@ -3,7 +3,7 @@ from typing import Any
 from pydantic import AliasChoices, AliasPath, BaseModel, Field
 
 from app.providers.x.common import get_canonical_url, get_snippet_from_text, parse_datetime
-from app.schemas.x.dto import XChannelInfo, XComment, XPost
+from app.schemas.x.dto import XChannelInfo, XPost
 
 
 class XUserRaw(BaseModel):
@@ -46,6 +46,8 @@ class XTweetRaw(BaseModel):
     thumbnail_url: str | None = Field(
         None, validation_alias=AliasPath("extendedEntities", "media", 0, "media_url_https")
     )
+    is_reply: bool = Field(validation_alias=AliasChoices("isReply"))
+    reply_to: str | None = Field(None, validation_alias=AliasChoices("inReplyToId"))
 
 
 def map_tweet_to_post(tweet: dict[str, Any]) -> XPost:
@@ -63,25 +65,6 @@ def map_tweet_to_post(tweet: dict[str, Any]) -> XPost:
         comments_count=parsed.reply_count,
         thumbnail_url=parsed.thumbnail_url,
         category=parsed.lang,
-    )
-
-
-class XCommentRaw(BaseModel):
-    id: str = ""
-    text: str = ""
-    created_at: str = Field("", validation_alias=AliasChoices("createdAt"))
-    like_count: int = Field(0, validation_alias=AliasChoices("likeCount"))
-    reply_count: int | None = Field(None, validation_alias=AliasChoices("replyCount"))
-    author_name: str = Field("", validation_alias=AliasPath("author", "name"))
-
-
-def map_tweet_to_comment(tweet: dict[str, Any]) -> XComment:
-    parsed = XCommentRaw.model_validate(tweet)
-    return XComment(
-        comment_id=parsed.id,
-        name=parsed.author_name,
-        comment=parsed.text,
-        time=parse_datetime(parsed.created_at),
-        likes=parsed.like_count,
-        reply_count=parsed.reply_count,
+        is_reply=parsed.is_reply,
+        reply_to=parsed.reply_to,
     )
