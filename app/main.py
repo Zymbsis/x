@@ -24,6 +24,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("Application startup complete")
     yield
     await twitterapi.shutdown(app)
+    logger.info("Application shutdown complete")
 
 
 app = FastAPI(lifespan=lifespan)

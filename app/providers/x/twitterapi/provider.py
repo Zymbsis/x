@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import datetime
@@ -24,6 +25,8 @@ from app.providers.x.twitterapi.client import TwitterApiClientDep
 from app.providers.x.twitterapi.limiter import TwitterApiLimiterDep
 from app.providers.x.twitterapi.mapper import map_tweet_to_post, map_user_to_channel_info
 from app.schemas.x.dto import ErrorDTO, XChannelInfo, XPost
+
+logger = logging.getLogger(__name__)
 
 
 class TwitterApiIoProvider(XProvider):
@@ -60,6 +63,8 @@ class TwitterApiIoProvider(XProvider):
 
         while True:
             if runtime_exceeded(timer_start, max_runtime_sec):
+                detail = f"pagination stopped: max_runtime_sec={max_runtime_sec} exceeded"
+                logger.warning(detail)
                 return
 
             try:
@@ -299,6 +304,8 @@ class TwitterApiIoProvider(XProvider):
 
         for source, post_id in zip(sources, post_ids, strict=True):
             if runtime_exceeded(started_at, max_runtime_sec):
+                detail = f"get_replies stopped: max_runtime_sec={max_runtime_sec} exceeded"
+                logger.warning(detail)
                 break
 
             count_before = len(data)
