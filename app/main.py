@@ -9,6 +9,7 @@ from app.core.logging import setup_logging
 from app.exceptions.base import AppError
 from app.exceptions.handlers import app_error_handler
 from app.providers.x.twitterapi import client as twitterapi
+from app.providers.x.twitterapi import limiter as twitterapi_limiter
 from app.routers import x_collection
 
 logger = logging.getLogger(__name__)
@@ -19,6 +20,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     setup_logging(settings.environment)
 
     await twitterapi.initialize(app)
+    await twitterapi_limiter.initialize(app)
     logger.info("Application startup complete")
     yield
     await twitterapi.shutdown(app)

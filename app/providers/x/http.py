@@ -1,60 +1,52 @@
-import asyncio
-from collections.abc import Callable
 from typing import Any
 
 import httpx
+from aiolimiter import AsyncLimiter
+from tenacity import RetryCallState, retry, retry_if_exception, stop_after_attempt, wait_exponential, wait_random
 
 from app.exceptions.base import ProviderError
-from app.providers.x.throttle import RequestGapThrottle
 
 RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 
 
-def _is_retryable_http_error(exc: httpx.HTTPError) -> bool:
+def _is_retryable_http_error(exc: BaseException) -> bool:
     if isinstance(exc, httpx.TimeoutException):
         return True
     if isinstance(exc, httpx.TransportError):
         return True
     if isinstance(exc, httpx.HTTPStatusError):
-        status = exc.response.status_code if exc.response is not None else None
-        return status in RETRYABLE_STATUS_CODES
+        return exc.response.status_code in RETRYABLE_STATUS_CODES
     return False
 
 
-async def get_json_with_retry(
+def _raise_provider_error(retry_state: RetryCallState) -> None:
+    exc = retry_state.outcome.exception()
+    detail = f"request failed: {exc}"
+    raise ProviderError(detail) from exc
+
+
+@retry(
+    stop=stop_after_attempt(2),
+    wait=wait_exponential(multiplier=1, min=1, max=10) + wait_random(0, 0.5),
+    retry=retry_if_exception(_is_retryable_http_error),
+    retry_error_callback=_raise_provider_error,
+)
+async def get_json(
     *,
     client: httpx.AsyncClient,
     path: str,
     params: dict[str, Any],
-    throttle: RequestGapThrottle | None,
-    validate_payload: Callable[[dict[str, Any]], None],
+    limiter: AsyncLimiter | None = None,
 ) -> dict[str, Any]:
-    for attempt in (1, 2):
-        if throttle is not None:
-            await throttle.wait_turn()
-
-        try:
+    if limiter is not None:
+        async with limiter:
             response = await client.get(path, params=params)
-            response.raise_for_status()
-            data = response.json()
-            if not isinstance(data, dict):
-                raise ProviderError("response is not a JSON object")
-            validate_payload(data)
+    else:
+        response = await client.get(path, params=params)
 
-        except httpx.HTTPError as exc:
-            if attempt == 1 and _is_retryable_http_error(exc):
-                await asyncio.sleep(0.7)
-                continue
-            detail = f"request failed: {exc}"
-            raise ProviderError(detail) from exc
-
-        except ValueError as exc:
-            detail = f"request failed: {exc}"
-            raise ProviderError(detail) from exc
-        else:
-            return data
-        finally:
-            if throttle is not None:
-                throttle.mark_finished()
-
-    raise ProviderError("request failed after retry")
+    response.raise_for_status()
+    try:
+        return response.json()
+    except ValueError as exc:
+        detail = f"request failed: {exc}"
+        raise ProviderError(detail) from exc

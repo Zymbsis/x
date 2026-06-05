@@ -1,8 +1,10 @@
+import asyncio
 import time
 from datetime import datetime
 from typing import Annotated, Any
 
 import httpx
+from aiolimiter import AsyncLimiter
 from fastapi import Depends
 
 from app.exceptions.base import ProviderError
@@ -16,53 +18,56 @@ from app.providers.x.common import (
     runtime_exceeded,
     to_unix_timestamp,
 )
-from app.providers.x.http import get_json_with_retry
-from app.providers.x.throttle import RequestGapThrottle
-from app.providers.x.twitterapi.client import TwitterApiClientDep, TwitterApiThrottleDep
+from app.providers.x.http import get_json
+from app.providers.x.twitterapi.client import TwitterApiClientDep
+from app.providers.x.twitterapi.limiter import TwitterApiLimiterDep
 from app.providers.x.twitterapi.mapper import map_tweet_to_comment, map_tweet_to_post, map_user_to_channel_info
 from app.schemas.x.dto import XChannelInfo, XComment, XPost
 from app.schemas.x.options import CollectionOptions
 
 
 class TwitterApiIoProvider(XProvider):
-    def __init__(self, client: httpx.AsyncClient, throttle: RequestGapThrottle | None) -> None:
+    def __init__(self, client: httpx.AsyncClient, limiter: AsyncLimiter) -> None:
         self._client = client
-        self._throttle = throttle
+        self._limiter = limiter
 
     @staticmethod
-    def _validate_twitterapi_payload(data: dict[str, Any]) -> None:
+    def _validate_payload(data: dict[str, Any]) -> None:
         if data.get("status") == "error":
             message = str(data.get("message") or data.get("msg") or "unknown provider error")
             raise ProviderError(message)
 
     async def _get_json(self, path: str, params: dict[str, Any]) -> dict[str, Any]:
-        return await get_json_with_retry(
+        data = await get_json(
             client=self._client,
             path=path,
             params=params,
-            throttle=self._throttle,
-            validate_payload=self._validate_twitterapi_payload,
+            limiter=self._limiter,
         )
+        self._validate_payload(data)
+        return data
+
+    async def _get_account_info(self, user_name: str) -> dict | None:
+        body = await self._get_json("/twitter/user/info", {"userName": user_name})
+        return body.get("data")
 
     async def get_account_info(self, handles_or_urls: list[str]) -> ProviderResult[XChannelInfo]:
         result: list[XChannelInfo] = []
         raw: list[dict[str, Any]] = []
 
-        for handle_or_url in handles_or_urls:
-            try:
-                user_name = extract_username(handle_or_url)
-                body = await self._get_json("/twitter/user/info", {"userName": user_name})
-                raw.append(body)
-
-                payload = body.get("data")
-                if not isinstance(payload, dict):
-                    raw.append({"handle": handle_or_url, "error": "missing or invalid data payload"})
-                    continue
-
-                result.append(map_user_to_channel_info(payload))
-
-            except (ProviderError, ValueError) as exc:
-                raw.append({"handle": handle_or_url, "error": str(exc)})
+        outcomes = await asyncio.gather(
+            *[self._get_account_info(extract_username(h)) for h in handles_or_urls],
+            return_exceptions=True,
+        )
+        for handle_or_url, outcome in zip(handles_or_urls, outcomes):
+            if isinstance(outcome, dict):
+                if "message" in outcome:
+                    raw.append({**outcome, "handle": handle_or_url})
+                else:
+                    raw.append(outcome)
+                    result.append(map_user_to_channel_info(outcome))
+            elif isinstance(outcome, BaseException):
+                raw.append({"error": str(outcome), "handle": handle_or_url})
 
         return ProviderResult[XChannelInfo](data=result, raw=raw)
 
@@ -389,11 +394,8 @@ class TwitterApiIoProvider(XProvider):
         return False
 
 
-def get_twitterapi_provider(
-    client: TwitterApiClientDep,
-    throttle: TwitterApiThrottleDep,
-) -> TwitterApiIoProvider:
-    return TwitterApiIoProvider(client, throttle)
+def get_twitterapi_provider(client: TwitterApiClientDep, limiter: TwitterApiLimiterDep) -> TwitterApiIoProvider:
+    return TwitterApiIoProvider(client, limiter)
 
 
 TwitterApiProviderDep = Annotated[TwitterApiIoProvider, Depends(get_twitterapi_provider)]

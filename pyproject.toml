@@ -9,6 +9,7 @@ dependencies = [
     "asyncpg>=0.31.0",
     "fastapi[standard]>=0.136.3",
     "sqlalchemy[asyncio]>=2.0.50",
+    "tenacity>=9.1.4",
 ]
 
 [dependency-groups]
@@ -25,7 +26,7 @@ exclude = [".venv","migrations", "alembic"]
 
 [tool.ruff.lint]
 select = ["ALL"]
-ignore = ["D100", "D101", "D102", "D103", "D104", "D107", "COM812", "FAST001", "TRY003", "EM101", "FBT001", "FBT002", "TRY301", "D203", "D213", "PLR0913", "DTZ007"]
+ignore = ["B905", "D100", "D101", "D102", "D103", "D104", "D107", "COM812", "FAST001", "TRY003", "EM101", "FBT001", "FBT002", "TRY301", "D203", "D213", "PLR0913", "DTZ007"]
 
 [tool.ruff.format]
 quote-style = "double"

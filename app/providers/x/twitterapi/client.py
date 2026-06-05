@@ -7,16 +7,11 @@ from fastapi.requests import HTTPConnection
 
 from app.config import settings
 from app.exceptions.base import ServiceUnavailableError
-from app.providers.x.throttle import RequestGapThrottle
 
 logger = logging.getLogger(__name__)
 
 
 async def initialize(app: FastAPI) -> None:
-    if settings.twitterapi_io.rate_limit_enabled:
-        app.state.twitterapi_throttle = RequestGapThrottle(settings.twitterapi_io.period_sec)
-    else:
-        app.state.twitterapi_throttle = None
     app.state.twitterapi_client = httpx.AsyncClient(
         base_url=settings.twitterapi_io.base_url,
         headers={"X-API-Key": settings.twitterapi_io.api_key},
@@ -38,9 +33,4 @@ def get_twitterapi_client(conn: HTTPConnection) -> httpx.AsyncClient:
     return client
 
 
-def get_twitterapi_throttle(conn: HTTPConnection) -> RequestGapThrottle | None:
-    return getattr(conn.app.state, "twitterapi_throttle", None)
-
-
 TwitterApiClientDep = Annotated[httpx.AsyncClient, Depends(get_twitterapi_client)]
-TwitterApiThrottleDep = Annotated[RequestGapThrottle | None, Depends(get_twitterapi_throttle)]
