@@ -1,15 +1,14 @@
 import abc
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
-from app.schemas.x.dto import XChannelInfo, XComment, XPost
-from app.schemas.x.options import CollectionOptions
+from app.schemas.x.dto import ErrorDTO, XChannelInfo, XPost
 
 
 @dataclass
 class ProviderResult[ItemT]:
     data: list[ItemT]
-    raw: list[dict[str, object]]
+    errors: list[ErrorDTO] = field(default_factory=list)
 
 
 class XProvider(abc.ABC):
@@ -18,7 +17,7 @@ class XProvider(abc.ABC):
 
     @abc.abstractmethod
     async def search_accounts(
-        self, query: str, limit: int | None, max_runtime_sec: int | None
+        self, query: str, limit: int | None, max_runtime_sec: int
     ) -> ProviderResult[XChannelInfo]: ...
 
     @abc.abstractmethod
@@ -28,7 +27,8 @@ class XProvider(abc.ABC):
         limit: int | None,
         since: datetime | None,
         until: datetime | None,
-        options: CollectionOptions,
+        max_runtime_sec: int,
+        with_replies: bool,
     ) -> ProviderResult[XPost]: ...
 
     @abc.abstractmethod
@@ -38,11 +38,14 @@ class XProvider(abc.ABC):
         limit: int | None,
         since: datetime | None,
         until: datetime | None,
-        options: CollectionOptions,
+        max_runtime_sec: int,
+        with_replies: bool,
     ) -> ProviderResult[XPost]: ...
 
     @abc.abstractmethod
-    async def get_posts(self, urls_or_ids: list[str], options: CollectionOptions) -> ProviderResult[XPost]: ...
+    async def get_posts(
+        self, urls_or_ids: list[str], max_runtime_sec: int, with_replies: bool
+    ) -> ProviderResult[XPost]: ...
 
     @abc.abstractmethod
     async def get_replies(
@@ -50,5 +53,5 @@ class XProvider(abc.ABC):
         post_urls_or_ids: list[str],
         limit: int | None,
         since: datetime | None,
-        options: CollectionOptions,
-    ) -> ProviderResult[XComment]: ...
+        max_runtime_sec: int,
+    ) -> ProviderResult[XPost]: ...

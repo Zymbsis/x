@@ -1,6 +1,6 @@
 import re
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 STATUS_URL_RE = re.compile(r"/status/(\d+)")
@@ -66,11 +66,41 @@ def to_unix_timestamp(value: datetime | None) -> int | None:
     return None if value is None else int(value.timestamp())
 
 
-def has_replies(tweet: dict[str, Any]) -> bool:
-    return int(tweet.get("replyCount", 0) or 0) > 0
+def _utc_timestamp(value: datetime) -> int:
+    if value.tzinfo is None:
+        return int(value.replace(tzinfo=UTC).timestamp())
+    return int(value.astimezone(UTC).timestamp())
 
 
-def filter_tweets_by_with_replies(tweets: object, with_replies: bool) -> object:
-    if with_replies or not isinstance(tweets, list):
+def build_advanced_search_query(query: str, since: datetime | None, until: datetime | None) -> str:
+    parts = [query.strip()]
+    if since is not None:
+        parts.append(f"since_time:{_utc_timestamp(since)}")
+    if until is not None:
+        parts.append(f"until_time:{_utc_timestamp(until) + 1}")
+    return " ".join(part for part in parts if part)
+
+
+def filter_tweets_by_date_range(
+    tweets: list[dict[str, Any]],
+    since: datetime | None,
+    until: datetime | None,
+) -> list[dict]:
+    if since is None and until is None:
         return tweets
-    return [tweet for tweet in tweets if not (isinstance(tweet, dict) and has_replies(tweet))]
+
+    return [
+        tweet
+        for tweet in tweets
+        if tweet.get("createdAt") and in_range(parse_datetime(tweet["createdAt"]), since, until)
+    ]
+
+
+def filter_tweets_by_with_replies(
+    tweets: list[dict[str, Any]],
+    with_replies: bool,
+) -> list[dict[str, Any]]:
+    if with_replies:
+        return tweets
+
+    return [tweet for tweet in tweets if not tweet.get("isReply")]

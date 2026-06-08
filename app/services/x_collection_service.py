@@ -4,7 +4,7 @@ from fastapi import Depends
 
 from app.providers.x.base import ProviderResult, XProvider
 from app.providers.x.registry import XProviderDep
-from app.schemas.x.dto import XChannelInfo, XComment, XPost
+from app.schemas.x.dto import XChannelInfo, XPost
 from app.schemas.x.requests import (
     AccountInfoRequest,
     AccountPostsRequest,
@@ -31,27 +31,21 @@ class XCollectionService:
             payload.limit,
             payload.since,
             payload.until,
-            payload.options,
+            payload.max_runtime_sec,
+            payload.with_replies,
         )
 
     async def search_posts(self, payload: SearchPostsRequest) -> ProviderResult[XPost]:
         return await self._provider.search_posts(
-            payload.query,
-            payload.limit,
-            payload.since,
-            payload.until,
-            payload.options,
+            payload.query, payload.limit, payload.since, payload.until, payload.max_runtime_sec, payload.with_replies
         )
 
     async def get_posts(self, payload: PostsRequest) -> ProviderResult[XPost]:
-        return await self._provider.get_posts(payload.urls_or_ids, payload.options)
+        return await self._provider.get_posts(payload.urls_or_ids, payload.max_runtime_sec, payload.with_replies)
 
-    async def get_replies(self, payload: RepliesRequest) -> ProviderResult[XComment]:
+    async def get_replies(self, payload: RepliesRequest) -> ProviderResult[XPost]:
         return await self._provider.get_replies(
-            payload.post_urls_or_ids,
-            payload.limit,
-            payload.since,
-            payload.options,
+            payload.post_urls_or_ids, payload.limit, payload.since, payload.max_runtime_sec
         )
 
 

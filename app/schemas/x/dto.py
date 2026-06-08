@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class XChannelInfo(BaseModel):
@@ -28,12 +28,10 @@ class XPost(BaseModel):
     comments_count: int
     thumbnail_url: str | None
     category: str
+    is_reply: bool
+    reply_to: str | None
 
 
-class XComment(BaseModel):
-    comment_id: str
-    name: str
-    comment: str
-    time: datetime
-    likes: int
-    reply_count: int | None
+class ErrorDTO(BaseModel):
+    source: str = Field(..., description="The input that caused the error")
+    detail: str = Field(..., description="Error message or exception details")
