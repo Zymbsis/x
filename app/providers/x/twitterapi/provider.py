@@ -25,6 +25,13 @@ from app.providers.x.http import get_json
 from app.providers.x.twitterapi.client import TwitterApiClientDep
 from app.providers.x.twitterapi.limiter import TwitterApiLimiterDep
 from app.providers.x.twitterapi.mapper import map_tweet_to_post, map_user_to_channel_info
+from app.providers.x.twitterapi.schemas import (
+    LastTweetsResponse,
+    SearchAccountsPage,
+    TweetsPage,
+    UserInfoResponse,
+    parse_response,
+)
 from app.schemas.x.dto import ErrorDTO, XChannelInfo, XPost
 
 logger = logging.getLogger(__name__)
@@ -87,16 +94,14 @@ class TwitterApiIoProvider(XProvider):
 
     async def _get_account_info(self, user_name: str) -> XChannelInfo:
         body = await self._get_json("/twitter/user/info", {"userName": user_name})
-        data = body.get("data")
-        if message := data.get("message"):
-            raise ProviderError(message)
-        return map_user_to_channel_info(data)
+        page = parse_response(UserInfoResponse, body)
+        if page.data.message:
+            raise ProviderError(page.data.message)
+        return map_user_to_channel_info(page.data.model_dump())
 
     async def _search_accounts(self, query: str, cursor: str) -> dict:
         body = await self._get_json("/twitter/user/search", {"query": query, "cursor": cursor})
-        if not isinstance(body.get("users"), list):
-            raise ProviderError("invalid users payload")
-        return body
+        return parse_response(SearchAccountsPage, body).model_dump()
 
     async def _get_account_posts(
         self,
@@ -114,14 +119,12 @@ class TwitterApiIoProvider(XProvider):
                 "includeReplies": with_replies,
             },
         )
-        data = body.get("data")
-        if not isinstance(data, dict) or not isinstance(data.get("tweets"), list):
-            raise ProviderError("invalid tweets payload")
+        page = parse_response(LastTweetsResponse, body)
 
         return {
-            "tweets": filter_tweets_by_date_range(data.get("tweets"), since, until),
-            "has_next_page": data.get("has_next_page"),
-            "next_cursor": data.get("next_cursor"),
+            "tweets": filter_tweets_by_date_range(page.data.tweets, since, until),
+            "has_next_page": page.data.has_next_page,
+            "next_cursor": page.data.next_cursor,
         }
 
     async def _search_posts(self, query: str, cursor: str, with_replies: bool) -> dict[str, Any]:
@@ -129,19 +132,16 @@ class TwitterApiIoProvider(XProvider):
             "/twitter/tweet/advanced_search",
             {"query": query, "cursor": cursor},
         )
-        if not isinstance(body.get("tweets"), list):
-            raise ProviderError("invalid tweets payload")
-        tweets = filter_tweets_by_with_replies(body["tweets"], with_replies)
+        page = parse_response(TweetsPage, body)
+        tweets = filter_tweets_by_with_replies(page.tweets, with_replies)
 
-        return {**body, "tweets": tweets}
+        return {**page.model_dump(), "tweets": tweets}
 
     async def _get_posts(self, tweet_ids: str, with_replies: bool) -> dict[str, Any]:
         body = await self._get_json("/twitter/tweets", {"tweet_ids": tweet_ids})
-        if not isinstance(body.get("tweets"), list):
-            raise ProviderError("invalid tweets payload")
-
-        tweets = filter_tweets_by_with_replies(body["tweets"], with_replies)
-        return {**body, "tweets": tweets}
+        page = parse_response(TweetsPage, body)
+        tweets = filter_tweets_by_with_replies(page.tweets, with_replies)
+        return {**page.model_dump(), "tweets": tweets}
 
     async def _get_replies(self, post_id: str, cursor: str, since: datetime | None) -> dict[str, Any]:
         params: dict[str, Any] = {"tweetId": post_id, "cursor": cursor}
@@ -150,15 +150,13 @@ class TwitterApiIoProvider(XProvider):
             params["sinceTime"] = since_ts
 
         body = await self._get_json("/twitter/tweet/replies", params)
-        if not isinstance(body.get("tweets"), list):
-            raise ProviderError("invalid tweets payload")
-
-        tweets = [t for t in body["tweets"] if str(t.get("id")) != post_id]
+        page = parse_response(TweetsPage, body)
+        tweets = [t for t in page.tweets if str(t.get("id")) != post_id]
 
         return {
             "tweets": tweets,
-            "has_next_page": body.get("has_next_page"),
-            "next_cursor": body.get("next_cursor"),
+            "has_next_page": page.has_next_page,
+            "next_cursor": page.next_cursor,
         }
 
     async def get_account_info(self, handles_or_urls: list[str]) -> ProviderResult[XChannelInfo]:
