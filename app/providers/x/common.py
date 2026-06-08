@@ -1,6 +1,6 @@
 import re
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 STATUS_URL_RE = re.compile(r"/status/(\d+)")
@@ -64,6 +64,21 @@ def limit_reached(collected_count: int, limit: int | None) -> bool:
 
 def to_unix_timestamp(value: datetime | None) -> int | None:
     return None if value is None else int(value.timestamp())
+
+
+def _utc_timestamp(value: datetime) -> int:
+    if value.tzinfo is None:
+        return int(value.replace(tzinfo=UTC).timestamp())
+    return int(value.astimezone(UTC).timestamp())
+
+
+def build_advanced_search_query(query: str, since: datetime | None, until: datetime | None) -> str:
+    parts = [query.strip()]
+    if since is not None:
+        parts.append(f"since_time:{_utc_timestamp(since)}")
+    if until is not None:
+        parts.append(f"until_time:{_utc_timestamp(until) + 1}")
+    return " ".join(part for part in parts if part)
 
 
 def filter_tweets_by_date_range(

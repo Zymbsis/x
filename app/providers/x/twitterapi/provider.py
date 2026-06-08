@@ -12,6 +12,7 @@ from fastapi import Depends
 from app.exceptions.base import ProviderError
 from app.providers.x.base import ProviderResult, XProvider
 from app.providers.x.common import (
+    build_advanced_search_query,
     extract_post_id,
     extract_username,
     filter_tweets_by_date_range,
@@ -123,14 +124,7 @@ class TwitterApiIoProvider(XProvider):
             "next_cursor": data.get("next_cursor"),
         }
 
-    async def _search_posts(
-        self,
-        query: str,
-        cursor: str,
-        with_replies: bool,
-        since: datetime | None,
-        until: datetime | None,
-    ) -> dict[str, Any]:
+    async def _search_posts(self, query: str, cursor: str, with_replies: bool) -> dict[str, Any]:
         body = await self._get_json(
             "/twitter/tweet/advanced_search",
             {"query": query, "cursor": cursor},
@@ -138,7 +132,6 @@ class TwitterApiIoProvider(XProvider):
         if not isinstance(body.get("tweets"), list):
             raise ProviderError("invalid tweets payload")
         tweets = filter_tweets_by_with_replies(body["tweets"], with_replies)
-        tweets = filter_tweets_by_date_range(tweets, since, until)
 
         return {**body, "tweets": tweets}
 
@@ -236,9 +229,10 @@ class TwitterApiIoProvider(XProvider):
     ) -> ProviderResult[XPost]:
         data: list[XPost] = []
         errors: list[ErrorDTO] = []
+        search_query = build_advanced_search_query(query, since, until)
 
         async for body in self._iter_cursor_pages(
-            fetch=lambda cursor: self._search_posts(query, cursor, with_replies, since, until),
+            fetch=lambda cursor: self._search_posts(search_query, cursor, with_replies),
             max_runtime_sec=max_runtime_sec,
             errors=errors,
         ):
